@@ -1,12 +1,14 @@
 import { createClient } from 'redis';
 
 const redisClient = createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379',
+  url: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
+  socket: {
+    reconnectStrategy: false,
+  },
 });
 
 redisClient.on('error', (err) => {
-  // Don't crash local setup if Redis is not locally installed/running
-  console.log('[Redis] Notice: Redis not connected locally or unreachable. Fallback enabled.');
+  // Silent error handler to avoid console spam when Redis isn't running locally
 });
 
 export const connectRedis = async () => {
