@@ -200,7 +200,8 @@ export const VideoRoomPage: React.FC = () => {
   useEffect(() => {
     initMedia();
 
-    const socket = io('http://localhost:5000', { withCredentials: true });
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    const socket = io(socketUrl, { withCredentials: true });
     socketRef.current = socket;
 
     socket.on('new-message', (msg: ChatMessage) => {

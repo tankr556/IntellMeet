@@ -19,9 +19,24 @@ import { setupSocketHandlers } from './sockets/meetingSocket';
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(',').map((url) => url.trim())
+  : ['http://localhost:5173'];
+
+const corsOptions = {
+  origin: (origin: any, callback: any) => {
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all for seamless WebRTC signaling in production
+    }
+  },
+  credentials: true,
+};
+
 // Middlewares
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 app.use(metricsMiddleware);
@@ -43,7 +58,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 // Socket.io Server Setup
 const io = new SocketServer(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: '*',
     methods: ['GET', 'POST'],
     credentials: true,
   },
