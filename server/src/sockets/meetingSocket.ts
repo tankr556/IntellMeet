@@ -13,12 +13,12 @@ export const setupSocketHandlers = (io: SocketServer) => {
     console.log(`[Socket.io] Connected: ${socket.id}`);
 
     // Room join/leave
-    socket.on('join-room', ({ meetingId, userId }: { meetingId: string; userId: string }) => {
+    socket.on('join-room', ({ meetingId, userId, name }: { meetingId: string; userId: string; name?: string }) => {
       socket.join(meetingId);
-      console.log(`[Socket.io] User ${userId} (${socket.id}) joined meeting: ${meetingId}`);
+      console.log(`[Socket.io] User ${name || userId} (${socket.id}) joined meeting: ${meetingId}`);
 
       // Broadcast presence notification to others in room
-      socket.to(meetingId).emit('user-joined', { userId, socketId: socket.id });
+      socket.to(meetingId).emit('user-joined', { userId, socketId: socket.id, name });
     });
 
     socket.on('leave-room', ({ meetingId, userId }: { meetingId: string; userId: string }) => {
@@ -28,8 +28,8 @@ export const setupSocketHandlers = (io: SocketServer) => {
     });
 
     // WebRTC Signaling Events Contract
-    socket.on('offer', ({ meetingId, offer, toSocketId }: { meetingId: string; offer: any; toSocketId: string }) => {
-      socket.to(toSocketId).emit('offer', { offer, fromSocketId: socket.id });
+    socket.on('offer', ({ meetingId, offer, toSocketId, fromName }: { meetingId: string; offer: any; toSocketId: string; fromName?: string }) => {
+      socket.to(toSocketId).emit('offer', { offer, fromSocketId: socket.id, fromName });
     });
 
     socket.on('answer', ({ meetingId, answer, toSocketId }: { meetingId: string; answer: any; toSocketId: string }) => {

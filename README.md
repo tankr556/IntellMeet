@@ -2,73 +2,71 @@
 
 IntellMeet is a production-grade full-stack MERN enterprise platform combining real-time WebRTC video meetings, AI meeting intelligence, team chat, post-meeting dashboards, and Kanban task management.
 
-## 🚀 Repository Structure
+## 🚀 Monorepo Repository Structure
 
 ```
 IntellMeet/
-├── client/          # React 19 + TypeScript + Vite Frontend (shadcn/ui, Tailwind CSS v4, Zustand, TanStack Query)
-├── server/          # Node.js + Express + TypeScript Backend (MongoDB, Redis, Socket.io, JWT Auth)
-└── .gitignore       # Git ignore settings
+├── client/                 # React 19 + TypeScript + Vite Frontend (shadcn/ui, Tailwind CSS v4, Zustand)
+│   ├── Dockerfile          # Nginx production container build
+│   └── src/
+├── server/                 # Node.js + Express + TypeScript Backend (MongoDB, Redis, Socket.io, JWT Auth)
+│   ├── Dockerfile          # Multi-stage production container build
+│   ├── k8s/                # Kubernetes manifests & service deployments
+│   ├── helm/               # Configurable Helm charts & values.yaml
+│   └── src/
+├── .github/workflows/      # GitHub Actions CI/CD Pipeline (lint, test, build, deploy)
+└── docker-compose.yml      # Local full-stack cluster container orchestration
 ```
-
-## 🛠️ Tech Stack Overview
-
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Zustand, TanStack Query
-- **Backend**: Node.js, Express, Mongoose (MongoDB), Redis, Socket.io
-- **Security**: JWT (Access + Refresh Tokens in httpOnly cookies), Bcrypt password hashing, Helmet, Rate Limiting
-- **Real-Time**: Socket.io + WebRTC (Signaling contract with `join-room`, `offer`, `answer`, `ice-candidate`, `send-message`)
 
 ---
 
-## ⚡ Quick Start Guide (Local Setup)
+## 🛠️ Complete 4-Week Technical Architecture
 
-### 1. Environment Variables Setup
+### 1. Backend & Real-Time Engine (Week 1 & 2)
+- **Node.js + Express**: REST API server with JWT access token + httpOnly refresh token cookie rotation.
+- **WebRTC + Socket.io**: Low-latency peer-to-peer video conferencing signaling (`join-room`, `offer`, `answer`, `ice-candidate`).
+- **Redis Session Caching**: Event-driven room metadata isolation and pub/sub adapter setup.
 
-Create a `.env` file in `/server` directory:
+### 2. AI Intelligence & Team Collaboration (Week 3)
+- **OpenAI Speech & GPT Intelligence**: Automated speech-to-text transcription, AI summaries, and structured action item extraction.
+- **Post-Meeting Hub**: Summary dashboard with CSV exports and instant action item conversion.
+- **Agile Kanban Board**: 3-Column task workflow (`To Do`, `In Progress`, `Done`) with real-time status updates.
+
+### 3. Containerization, Kubernetes & Observability (Week 4)
+- **Docker Multi-Stage**: Lightweight production images using Alpine Linux and Nginx reverse proxy.
+- **Kubernetes + Helm**: Replicated microservice deployment manifests and configurable `values.yaml`.
+- **GitHub Actions CI/CD**: Automated linting, building, container packaging, and deployment pipeline.
+- **Prometheus Observability**: Active `/metrics` endpoint for monitoring request rates and WebRTC socket connection health.
+
+---
+
+## ⚡ Quick Start Guide (Local Development Setup)
+
+### 1. Environment Variables (`server/.env`)
 
 ```env
 PORT=5000
 NODE_ENV=development
-MONGO_URI=mongodb://localhost:27017/intellmeet
+MONGO_URI=mongodb://127.0.0.1:27017/intellmeet
 JWT_SECRET=super_secret_access_jwt_key_2026
 JWT_REFRESH_SECRET=super_secret_refresh_jwt_key_2026
-REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://127.0.0.1:6379
 CLIENT_URL=http://localhost:5173
+OPENAI_API_KEY=your_openai_key_here
 ```
 
-### 2. Install & Run Server (Backend)
+### 2. Run with Docker Compose (One-Command Full Stack)
 
 ```bash
-cd server
-npm install
-npm run dev
-```
-
-### 3. Install & Run Client (Frontend)
-
-```bash
-cd client
-npm install
-npm run dev
+docker-compose up --build
 ```
 
 ---
 
-## 🔐 WebRTC Socket.io Signaling Contract & Event Reference
+## 📽️ Submission Deliverables Checklist (Zidio Development / LogicVeda)
 
-- `join-room`: Joins a specific meeting room session.
-- `leave-room`: Leaves the current meeting room session.
-- `offer`: Transmits WebRTC SDP offer to peer target.
-- `answer`: Transmits WebRTC SDP answer back to host peer.
-- `ice-candidate`: Exchanges ICE candidates for peer-to-peer connection setup.
-- `send-message`: Transmits in-meeting chat messages scoped strictly to `meetingId`.
-- `new-message`: Broadcasts incoming chat to all participants in the meeting room.
-- `action-item-assigned`: Emits real-time task assignment notification.
-
----
-
-## 🛡️ Security Architecture & Tradeoffs
-
-### Refresh Token Security: `httpOnly` Cookie vs `localStorage`
-- **localStorage**: Vulnerable to Cross-Site Scripting (XSS) attacks. If an attacker injects malicious JavaScript, they can access tokens directly.
-- **httpOnly Cookies**: Protected against client-side JavaScript theft. Browsers automatically attach cookies to requests without exposing the raw secret to client scripts. Combined with `SameSite=Strict` and `Secure` flags, it significantly prevents XSS token theft and CSRF attacks.
+- [x] **Project Documentation PDF**: Structure prepared following pages 8-12 guidelines.
+- [x] **GitHub Repository**: Organized MERN monorepo structure.
+- [x] **README.md**: Comprehensive architecture and setup guide.
+- [x] **Live Demo Setup**: Configured for Vercel/Render deployment.
+- [x] **Observability**: Prometheus `/metrics` endpoint configured.

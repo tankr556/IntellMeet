@@ -7,6 +7,12 @@ export const createMeeting = async (req: AuthRequest, res: Response): Promise<vo
     const { title, scheduledAt } = req.body;
     const hostId = req.user?.userId;
 
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let roomCode = '';
+    for (let i = 0; i < 7; i++) {
+      roomCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
     const meeting = await Meeting.create({
       title,
       hostId,
@@ -14,7 +20,13 @@ export const createMeeting = async (req: AuthRequest, res: Response): Promise<vo
       participants: [hostId],
     });
 
-    res.status(201).json({ message: 'Meeting created successfully', meeting });
+    const responseMeeting = {
+      ...meeting.toObject(),
+      _id: roomCode,
+      code: roomCode,
+    };
+
+    res.status(201).json({ message: 'Meeting created successfully', meeting: responseMeeting });
   } catch (error) {
     res.status(500).json({ message: 'Error creating meeting', error });
   }

@@ -12,6 +12,8 @@ import { connectRedis } from './config/redis';
 import authRoutes from './routes/authRoutes';
 import meetingRoutes from './routes/meetingRoutes';
 import userRoutes from './routes/userRoutes';
+import aiRoutes from './routes/aiRoutes';
+import { metricsMiddleware, getPrometheusMetrics } from './middleware/metrics';
 import { setupSocketHandlers } from './sockets/meetingSocket';
 
 const app = express();
@@ -22,11 +24,16 @@ app.use(helmet());
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+app.use(metricsMiddleware);
+
+// Observability Endpoint
+app.get('/metrics', getPrometheusMetrics);
 
 // REST Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req: Request, res: Response) => {
@@ -51,7 +58,7 @@ const startServer = async () => {
   await connectDB();
   await connectRedis();
 
-  server.listen(PORT, () => {
+  server.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`[Server] Running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
   });
 };
