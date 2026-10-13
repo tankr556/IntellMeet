@@ -269,7 +269,7 @@ export const AnalyticsPage: React.FC = () => {
       <div className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#F8FAFC] dark:bg-[#090D16]">
         <Header />
 
-        <main className="p-8 max-w-6xl w-full mx-auto space-y-6 flex-1 pb-16">
+        <main className="p-4 sm:p-8 max-w-6xl w-full mx-auto space-y-6 flex-1 pb-16">
           {/* Header Title & Subtitle */}
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center space-x-2">

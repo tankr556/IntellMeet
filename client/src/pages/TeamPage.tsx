@@ -63,7 +63,7 @@ export const TeamPage: React.FC = () => {
 
         {/* 1. TEAM DETAIL VIEW */}
         {selectedTeam ? (
-          <main className="p-8 max-w-5xl w-full mx-auto space-y-6 flex-1">
+          <main className="p-4 sm:p-8 max-w-5xl w-full mx-auto space-y-6 flex-1">
             <div>
               <button
                 onClick={() => setSelectedTeam(null)}
@@ -243,7 +243,7 @@ export const TeamPage: React.FC = () => {
           </main>
         ) : (
           /* 2. TEAMS LIST VIEW (MATCHING FIRST USER SCREENSHOT) */
-          <main className="p-8 max-w-5xl w-full mx-auto space-y-8 flex-1">
+          <main className="p-4 sm:p-8 max-w-5xl w-full mx-auto space-y-6 sm:space-y-8 flex-1">
             <div>
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
                 Teams
