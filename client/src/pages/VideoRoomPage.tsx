@@ -165,9 +165,24 @@ export const VideoRoomPage: React.FC = () => {
   const [participants, setParticipants] = useState<{ socketId: string; name: string }[]>([]);
   const [remoteStreams, setRemoteStreams] = useState<{ [socketId: string]: MediaStream }>({});
   const peersRef = useRef<{ [socketId: string]: RTCPeerConnection }>({});
+  const pendingCandidatesRef = useRef<{ [socketId: string]: RTCIceCandidateInit[] }>({});
+
+  const processCandidateQueue = async (socketId: string, peer: RTCPeerConnection) => {
+    const queue = pendingCandidatesRef.current[socketId];
+    if (queue && queue.length > 0) {
+      for (const cand of queue) {
+        try {
+          await peer.addIceCandidate(new RTCIceCandidate(cand));
+        } catch (e) {
+          console.warn('[WebRTC] Error adding queued ICE candidate:', e);
+        }
+      }
+      delete pendingCandidatesRef.current[socketId];
+    }
+  };
 
   // Helper to create WebRTC Peer Connection
-  const createPeer = (targetSocketId: string, socket: Socket, stream: MediaStream) => {
+  const createPeer = (targetSocketId: string, socket: Socket, stream: MediaStream | null) => {
     const peer = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -175,26 +190,43 @@ export const VideoRoomPage: React.FC = () => {
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
-      ]
+      ],
     });
 
-    stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+    if (stream) {
+      stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+    } else {
+      peer.addTransceiver('video', { direction: 'recvonly' });
+      peer.addTransceiver('audio', { direction: 'recvonly' });
+    }
 
     peer.onicecandidate = (event) => {
       if (event.candidate) {
         socket.emit('ice-candidate', {
           meetingId: roomId,
           candidate: event.candidate,
-          toSocketId: targetSocketId
+          toSocketId: targetSocketId,
         });
       }
     };
 
     peer.ontrack = (event) => {
-      setRemoteStreams((prev) => ({
-        ...prev,
-        [targetSocketId]: event.streams[0]
-      }));
+      console.log(`[WebRTC] Received remote stream track from ${targetSocketId}:`, event.track.kind);
+      if (event.streams && event.streams[0]) {
+        setRemoteStreams((prev) => ({
+          ...prev,
+          [targetSocketId]: event.streams[0],
+        }));
+      } else {
+        setRemoteStreams((prev) => {
+          const current = prev[targetSocketId] || new MediaStream();
+          current.addTrack(event.track);
+          return {
+            ...prev,
+            [targetSocketId]: current,
+          };
+        });
+      }
     };
 
     return peer;
@@ -203,7 +235,11 @@ export const VideoRoomPage: React.FC = () => {
   useEffect(() => {
     initMedia();
 
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    const socketUrl =
+      import.meta.env.VITE_SOCKET_URL ||
+      (import.meta.env.PROD
+        ? 'https://intellmeet-zidio-ff1v.onrender.com'
+        : 'http://localhost:5000');
     const socket = io(socketUrl, { withCredentials: true });
     socketRef.current = socket;
 
@@ -237,20 +273,32 @@ export const VideoRoomPage: React.FC = () => {
         return [...prev, { socketId, name: participantName }];
       });
 
-      const currentStream = localStreamRef.current;
-      if (currentStream) {
-        const peer = createPeer(socketId, socket, currentStream);
-        peersRef.current[socketId] = peer;
+      let currentStream = localStreamRef.current;
+      if (!currentStream) {
+        try {
+          currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          localStreamRef.current = currentStream;
+          setLocalStream(currentStream);
+        } catch (e) {
+          console.warn('[WebRTC] User-joined media fallback:', e);
+        }
+      }
 
-        const offer = await peer.createOffer();
+      const peer = createPeer(socketId, socket, currentStream);
+      peersRef.current[socketId] = peer;
+
+      try {
+        const offer = await peer.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
         await peer.setLocalDescription(offer);
 
         socket.emit('offer', {
           meetingId: roomId,
           offer,
           toSocketId: socketId,
-          fromName: displayName
+          fromName: displayName,
         });
+      } catch (err) {
+        console.error('[WebRTC] Error creating offer:', err);
       }
     });
 
@@ -260,11 +308,23 @@ export const VideoRoomPage: React.FC = () => {
         return [...prev, { socketId: fromSocketId, name: fromName || 'Participant' }];
       });
 
-      const currentStream = localStreamRef.current;
-      if (currentStream) {
-        const peer = createPeer(fromSocketId, socket, currentStream);
-        peersRef.current[fromSocketId] = peer;
+      let currentStream = localStreamRef.current;
+      if (!currentStream) {
+        try {
+          currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          localStreamRef.current = currentStream;
+          setLocalStream(currentStream);
+        } catch (e) {
+          console.warn('[WebRTC] Offer media fallback:', e);
+        }
+      }
+
+      const peer = createPeer(fromSocketId, socket, currentStream);
+      peersRef.current[fromSocketId] = peer;
+
+      try {
         await peer.setRemoteDescription(new RTCSessionDescription(offer));
+        await processCandidateQueue(fromSocketId, peer);
 
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
@@ -272,22 +332,39 @@ export const VideoRoomPage: React.FC = () => {
         socket.emit('answer', {
           meetingId: roomId,
           answer,
-          toSocketId: fromSocketId
+          toSocketId: fromSocketId,
         });
+      } catch (err) {
+        console.error('[WebRTC] Error processing offer:', err);
       }
     });
 
     socket.on('answer', async ({ answer, fromSocketId }: { answer: any; fromSocketId: string }) => {
       const peer = peersRef.current[fromSocketId];
       if (peer) {
-        await peer.setRemoteDescription(new RTCSessionDescription(answer));
+        try {
+          await peer.setRemoteDescription(new RTCSessionDescription(answer));
+          await processCandidateQueue(fromSocketId, peer);
+        } catch (err) {
+          console.error('[WebRTC] Error setting remote description for answer:', err);
+        }
       }
     });
 
     socket.on('ice-candidate', async ({ candidate, fromSocketId }: { candidate: any; fromSocketId: string }) => {
+      if (!candidate) return;
       const peer = peersRef.current[fromSocketId];
-      if (peer) {
-        await peer.addIceCandidate(new RTCIceCandidate(candidate));
+      if (peer && peer.remoteDescription && peer.remoteDescription.type) {
+        try {
+          await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.warn('[WebRTC] Error adding ICE candidate:', err);
+        }
+      } else {
+        if (!pendingCandidatesRef.current[fromSocketId]) {
+          pendingCandidatesRef.current[fromSocketId] = [];
+        }
+        pendingCandidatesRef.current[fromSocketId].push(candidate);
       }
     });
 
@@ -613,6 +690,7 @@ export const VideoRoomPage: React.FC = () => {
                           ref={(el) => {
                             if (el && remoteStreams[p.socketId] && el.srcObject !== remoteStreams[p.socketId]) {
                               el.srcObject = remoteStreams[p.socketId];
+                              el.play().catch(() => {});
                             }
                           }}
                           autoPlay

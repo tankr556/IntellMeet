@@ -98,7 +98,10 @@ export const LobbyPage: React.FC = () => {
 
   const handleJoinMeeting = (e: React.FormEvent) => {
     e.preventDefault();
-    const codeToUse = meetingIdInput.trim() || 'T6G59G3';
+    let codeToUse = meetingIdInput.trim() || 'T6G59G3';
+    if (codeToUse.includes('/room/')) {
+      codeToUse = codeToUse.split('/room/').pop()?.split('?')[0] || codeToUse;
+    }
     navigate(`/room/${codeToUse}`);
   };
 

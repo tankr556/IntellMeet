@@ -58,7 +58,9 @@ app.get('/api/health', (req: Request, res: Response) => {
 // Socket.io Server Setup
 const io = new SocketServer(server, {
   cors: {
-    origin: '*',
+    origin: (origin: any, callback: any) => {
+      callback(null, true);
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },

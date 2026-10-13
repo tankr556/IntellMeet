@@ -51,9 +51,12 @@ export const Header: React.FC = () => {
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
 
-  // Listen to Socket.io for Real-time Notifications (e.g., meeting created, action item assigned)
   useEffect(() => {
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    const socketUrl =
+      import.meta.env.VITE_SOCKET_URL ||
+      (import.meta.env.PROD
+        ? 'https://intellmeet-zidio-ff1v.onrender.com'
+        : 'http://localhost:5000');
     const socket = io(socketUrl, { withCredentials: true });
 
     socket.on('notification', (data: any) => {
