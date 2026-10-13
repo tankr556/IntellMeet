@@ -171,7 +171,10 @@ export const VideoRoomPage: React.FC = () => {
     const peer = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
       ]
     });
 
@@ -211,6 +214,18 @@ export const VideoRoomPage: React.FC = () => {
         const updated = [...prev, msg];
         localStorage.setItem(`room_chat_${roomId}`, JSON.stringify(updated));
         return updated;
+      });
+    });
+
+    // Receive all existing participants who are already inside the room
+    socket.on('room-users', (existingUsers: { socketId: string; name: string }[]) => {
+      setParticipants((prev) => {
+        const map = new Map<string, { socketId: string; name: string }>();
+        prev.forEach((p) => map.set(p.socketId, p));
+        existingUsers.forEach((u) => {
+          if (u.socketId !== socket.id) map.set(u.socketId, u);
+        });
+        return Array.from(map.values());
       });
     });
 
