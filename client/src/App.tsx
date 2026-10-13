@@ -52,14 +52,7 @@ export function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/room/:roomId"
-            element={
-              <ProtectedRoute>
-                <VideoRoomPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/room/:roomId" element={<VideoRoomPage />} />
           <Route
             path="/summary/:meetingId"
             element={

@@ -78,7 +78,10 @@ export const VideoRoomPage: React.FC = () => {
   const socketRef = useRef<Socket | null>(null);
   const recognitionRef = useRef<any>(null);
 
-  const displayName = user?.name || 'Rakesh Tank';
+  const [guestName, setGuestName] = useState(() => {
+    return user?.name || localStorage.getItem('intellmeet_user_name') || 'Rakesh Tank';
+  });
+  const displayName = user?.name || guestName || 'Participant';
   const userInitials = displayName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'RT';
 
   // Timer Effect once joined
@@ -454,7 +457,7 @@ export const VideoRoomPage: React.FC = () => {
   const [copiedInvite, setCopiedInvite] = useState(false);
 
   const handleCopyInvite = () => {
-    const inviteUrl = window.location.href;
+    const inviteUrl = window.location.origin ? `${window.location.origin}/room/${roomId}` : window.location.href;
     navigator.clipboard.writeText(inviteUrl);
     setCopiedInvite(true);
     setTimeout(() => {
@@ -580,12 +583,16 @@ export const VideoRoomPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Joining as</label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Your Name</label>
                   <input
                     type="text"
-                    disabled
                     value={displayName}
-                    className="w-full bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 outline-none"
+                    onChange={(e) => {
+                      setGuestName(e.target.value);
+                      localStorage.setItem('intellmeet_user_name', e.target.value);
+                    }}
+                    placeholder="Enter your name"
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition"
                   />
                 </div>
 
@@ -641,75 +648,100 @@ export const VideoRoomPage: React.FC = () => {
 
             {/* Room Main View */}
             <div className="flex-1 grid md:grid-cols-12 gap-6 items-start">
-              {/* Main Video Grid Screen (Responsive Dynamic Layout with Auto-Scroll for Large Groups) */}
-              <div className="md:col-span-8 overflow-y-auto max-h-[calc(100vh-220px)] pr-1">
-                <div
-                  className={`grid gap-3 transition-all ${participants.length === 0
-                      ? 'grid-cols-1 aspect-video'
-                      : participants.length === 1
-                        ? 'grid-cols-1 sm:grid-cols-2 aspect-video'
-                        : participants.length <= 3
-                          ? 'grid-cols-2'
-                          : participants.length <= 8
-                            ? 'grid-cols-2 lg:grid-cols-3'
-                            : 'grid-cols-3 lg:grid-cols-4'
-                    }`}
-                >
-                  {/* Local Video Stream Tile */}
-                  <div className="bg-slate-900 dark:bg-[#0F172A] border border-slate-800 rounded-3xl relative overflow-hidden flex items-center justify-center shadow-xl min-h-[180px] sm:min-h-[220px]">
-                    {localStream && !isVideoOff ? (
-                      <video
-                        ref={(el) => {
-                          localVideoRef.current = el;
-                          if (el && localStream && el.srcObject !== localStream) {
-                            el.srcObject = localStream;
-                          }
-                        }}
-                        autoPlay
-                        muted
-                        playsInline
-                        className="w-full h-full object-cover transform -scale-x-100"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center space-y-2">
-                        <div className="w-14 h-14 bg-indigo-600/30 border border-indigo-500/50 rounded-full flex items-center justify-center text-lg font-bold text-indigo-300">
-                          {userInitials}
+              {/* Main Video Grid Screen (Responsive Dynamic Layout: 2 people = balanced size, 3+ people = smaller auto-scaled) */}
+              <div className="md:col-span-8 overflow-y-auto max-h-[calc(100vh-200px)] pr-1">
+                {(() => {
+                  const totalCount = participants.length + 1;
+                  const gridColsClass =
+                    totalCount === 1
+                      ? 'grid-cols-1 max-w-2xl mx-auto'
+                      : totalCount === 2
+                      ? 'grid-cols-1 sm:grid-cols-2'
+                      : totalCount === 3
+                      ? 'grid-cols-1 sm:grid-cols-3'
+                      : totalCount === 4
+                      ? 'grid-cols-2'
+                      : totalCount <= 6
+                      ? 'grid-cols-2 sm:grid-cols-3'
+                      : 'grid-cols-2 sm:grid-cols-4';
+
+                  const tileHeightClass =
+                    totalCount === 1
+                      ? 'min-h-[220px] sm:min-h-[300px] max-h-[420px]'
+                      : totalCount === 2
+                      ? 'min-h-[190px] sm:min-h-[240px] max-h-[340px]'
+                      : totalCount === 3
+                      ? 'min-h-[140px] sm:min-h-[180px] max-h-[230px]'
+                      : totalCount === 4
+                      ? 'min-h-[130px] sm:min-h-[160px] max-h-[200px]'
+                      : totalCount <= 6
+                      ? 'min-h-[110px] sm:min-h-[140px] max-h-[170px]'
+                      : 'min-h-[100px] sm:min-h-[120px] max-h-[145px]';
+
+                  const avatarClass =
+                    totalCount <= 2 ? 'w-14 h-14 text-lg' : totalCount <= 4 ? 'w-11 h-11 text-sm' : 'w-8 h-8 text-xs';
+
+                  return (
+                    <div className={`grid gap-3 transition-all ${gridColsClass}`}>
+                      {/* Local Video Stream Tile */}
+                      <div className={`bg-slate-900 dark:bg-[#0F172A] border border-slate-800 rounded-2xl relative overflow-hidden flex items-center justify-center shadow-lg aspect-video ${tileHeightClass}`}>
+                        {localStream && !isVideoOff ? (
+                          <video
+                            ref={(el) => {
+                              localVideoRef.current = el;
+                              if (el && localStream && el.srcObject !== localStream) {
+                                el.srcObject = localStream;
+                                el.play().catch(() => {});
+                              }
+                            }}
+                            autoPlay
+                            muted
+                            playsInline
+                            className="w-full h-full object-cover transform -scale-x-100"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center space-y-2">
+                            <div className={`${avatarClass} bg-indigo-600/30 border border-indigo-500/50 rounded-full flex items-center justify-center font-bold text-indigo-300`}>
+                              {userInitials}
+                            </div>
+                          </div>
+                        )}
+                        <div className="absolute bottom-2.5 left-2.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg text-[11px] text-white font-medium z-10 flex items-center space-x-1">
+                          <span className="truncate max-w-[130px]">{displayName} (you)</span>
+                          <span className="text-[9px] text-indigo-400 font-semibold">• host</span>
                         </div>
                       </div>
-                    )}
-                    <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg text-xs text-white font-medium z-10">
-                      {displayName} (you) • host
-                    </div>
-                  </div>
 
-                  {/* Remote Participant Video Tiles */}
-                  {participants.map((p) => (
-                    <div key={p.socketId} className="bg-slate-900 dark:bg-[#0F172A] border border-slate-800 rounded-3xl relative overflow-hidden flex items-center justify-center shadow-xl min-h-[180px] sm:min-h-[220px]">
-                      {remoteStreams[p.socketId] ? (
-                        <video
-                          ref={(el) => {
-                            if (el && remoteStreams[p.socketId] && el.srcObject !== remoteStreams[p.socketId]) {
-                              el.srcObject = remoteStreams[p.socketId];
-                              el.play().catch(() => {});
-                            }
-                          }}
-                          autoPlay
-                          playsInline
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center space-y-2">
-                          <div className="w-14 h-14 bg-indigo-600/30 border border-indigo-500/50 rounded-full flex items-center justify-center text-lg font-bold text-indigo-300">
-                            {p.name.slice(0, 2).toUpperCase()}
+                      {/* Remote Participant Video Tiles */}
+                      {participants.map((p) => (
+                        <div key={p.socketId} className={`bg-slate-900 dark:bg-[#0F172A] border border-slate-800 rounded-2xl relative overflow-hidden flex items-center justify-center shadow-lg aspect-video ${tileHeightClass}`}>
+                          {remoteStreams[p.socketId] ? (
+                            <video
+                              ref={(el) => {
+                                if (el && remoteStreams[p.socketId] && el.srcObject !== remoteStreams[p.socketId]) {
+                                  el.srcObject = remoteStreams[p.socketId];
+                                  el.play().catch(() => {});
+                                }
+                              }}
+                              autoPlay
+                              playsInline
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center space-y-2">
+                              <div className={`${avatarClass} bg-indigo-600/30 border border-indigo-500/50 rounded-full flex items-center justify-center font-bold text-indigo-300`}>
+                                {p.name.slice(0, 2).toUpperCase()}
+                              </div>
+                            </div>
+                          )}
+                          <div className="absolute bottom-2.5 left-2.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg text-[11px] text-white font-medium z-10">
+                            <span className="truncate max-w-[130px]">{p.name}</span>
                           </div>
                         </div>
-                      )}
-                      <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg text-xs text-white font-medium z-10">
-                        {p.name}
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
               </div>
 
               {/* Right Chat & People Drawer */}
@@ -846,7 +878,7 @@ export const VideoRoomPage: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-400 leading-relaxed">
-              Only members of <strong className="text-slate-200">IntellMeet Demo Team</strong> can join, and everyone who uses <strong className="text-slate-200">Try Live Demo</strong> is one. Send this link and ask them to choose <strong className="text-slate-200">Try Live Demo</strong>. Somebody signed in with their own account is not in this team and will be turned away.
+              Share this meeting link or room code with anyone. They can join directly from their mobile or laptop browser.
             </p>
 
             <div className="space-y-1.5 pt-1">
@@ -855,7 +887,7 @@ export const VideoRoomPage: React.FC = () => {
                 <input
                   type="text"
                   readOnly
-                  value={window.location.href}
+                  value={window.location.origin ? `${window.location.origin}/room/${roomId}` : window.location.href}
                   className="flex-1 bg-slate-900 border border-indigo-500/50 rounded-xl px-3.5 py-2.5 text-xs text-indigo-300 font-mono overflow-hidden text-ellipsis whitespace-nowrap outline-none"
                 />
                 <button
