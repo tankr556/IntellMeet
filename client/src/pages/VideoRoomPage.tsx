@@ -648,104 +648,89 @@ export const VideoRoomPage: React.FC = () => {
 
             {/* Room Main View */}
             <div className="flex-1 grid md:grid-cols-12 gap-6 items-start">
-              {/* Main Video Grid Screen (Responsive Dynamic Layout: 2 people = balanced size, 3+ people = smaller auto-scaled) */}
-              <div className="md:col-span-8 overflow-y-auto max-h-[calc(100vh-200px)] pr-1">
+              {/* Main Video Grid Screen (Responsive 2-Column Grid: 3rd person and onwards stack downwards with vertical scrollbar) */}
+              <div className="md:col-span-8 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-210px)] pr-2">
                 {(() => {
                   const totalCount = participants.length + 1;
                   const gridColsClass =
-                    totalCount === 1
-                      ? 'grid-cols-1 max-w-2xl mx-auto'
-                      : totalCount === 2
-                      ? 'grid-cols-1 sm:grid-cols-2'
-                      : totalCount === 3
-                      ? 'grid-cols-1 sm:grid-cols-3'
-                      : totalCount === 4
-                      ? 'grid-cols-2'
-                      : totalCount <= 6
-                      ? 'grid-cols-2 sm:grid-cols-3'
-                      : 'grid-cols-2 sm:grid-cols-4';
+                    totalCount === 1 ? 'grid-cols-1 max-w-2xl mx-auto' : 'grid-cols-1 sm:grid-cols-2';
 
-                  const tileHeightClass =
-                    totalCount === 1
-                      ? 'min-h-[220px] sm:min-h-[300px] max-h-[420px]'
-                      : totalCount === 2
-                      ? 'min-h-[190px] sm:min-h-[240px] max-h-[340px]'
-                      : totalCount === 3
-                      ? 'min-h-[140px] sm:min-h-[180px] max-h-[230px]'
-                      : totalCount === 4
-                      ? 'min-h-[130px] sm:min-h-[160px] max-h-[200px]'
-                      : totalCount <= 6
-                      ? 'min-h-[110px] sm:min-h-[140px] max-h-[170px]'
-                      : 'min-h-[100px] sm:min-h-[120px] max-h-[145px]';
-
-                  const avatarClass =
-                    totalCount <= 2 ? 'w-14 h-14 text-lg' : totalCount <= 4 ? 'w-11 h-11 text-sm' : 'w-8 h-8 text-xs';
+                  const allTiles = [
+                    { isLocal: true, socketId: 'local', name: displayName },
+                    ...participants.map((p) => ({ isLocal: false, socketId: p.socketId, name: p.name })),
+                  ];
 
                   return (
-                    <div className={`grid gap-3 transition-all ${gridColsClass}`}>
-                      {/* Local Video Stream Tile */}
-                      <div className={`bg-slate-900 dark:bg-[#0F172A] border border-slate-800 rounded-2xl relative overflow-hidden flex items-center justify-center shadow-lg aspect-video ${tileHeightClass}`}>
-                        {localStream && !isVideoOff ? (
-                          <video
-                            ref={(el) => {
-                              localVideoRef.current = el;
-                              if (el && localStream && el.srcObject !== localStream) {
-                                el.srcObject = localStream;
-                                el.play().catch(() => {});
-                              }
-                            }}
-                            autoPlay
-                            muted
-                            playsInline
-                            className="w-full h-full object-cover transform -scale-x-100"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center space-y-2">
-                            <div className={`${avatarClass} bg-indigo-600/30 border border-indigo-500/50 rounded-full flex items-center justify-center font-bold text-indigo-300`}>
-                              {userInitials}
-                            </div>
-                          </div>
-                        )}
-                        <div className="absolute bottom-2.5 left-2.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg text-[11px] text-white font-medium z-10 flex items-center space-x-1">
-                          <span className="truncate max-w-[130px]">{displayName} (you)</span>
-                          <span className="text-[9px] text-indigo-400 font-semibold">• host</span>
-                        </div>
-                      </div>
+                    <div className={`grid gap-4 w-full ${gridColsClass}`}>
+                      {allTiles.map((tile, idx) => {
+                        const isOddLast = totalCount % 2 !== 0 && totalCount > 1 && idx === allTiles.length - 1;
+                        const tileWrapperClass = isOddLast
+                          ? 'sm:col-span-2 sm:w-[calc(50%-0.5rem)] sm:mx-auto'
+                          : 'w-full';
 
-                      {/* Remote Participant Video Tiles */}
-                      {participants.map((p) => (
-                        <div key={p.socketId} className={`bg-slate-900 dark:bg-[#0F172A] border border-slate-800 rounded-2xl relative overflow-hidden flex items-center justify-center shadow-lg aspect-video ${tileHeightClass}`}>
-                          {remoteStreams[p.socketId] ? (
-                            <video
-                              ref={(el) => {
-                                if (el && remoteStreams[p.socketId] && el.srcObject !== remoteStreams[p.socketId]) {
-                                  el.srcObject = remoteStreams[p.socketId];
-                                  el.play().catch(() => {});
-                                }
-                              }}
-                              autoPlay
-                              playsInline
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center space-y-2">
-                              <div className={`${avatarClass} bg-indigo-600/30 border border-indigo-500/50 rounded-full flex items-center justify-center font-bold text-indigo-300`}>
-                                {p.name.slice(0, 2).toUpperCase()}
+                        return (
+                          <div
+                            key={tile.socketId}
+                            className={`bg-slate-900 dark:bg-[#0F172A] border border-slate-800 rounded-2xl relative overflow-hidden flex items-center justify-center shadow-lg aspect-video ${tileWrapperClass}`}
+                          >
+                            {tile.isLocal ? (
+                              localStream && !isVideoOff ? (
+                                <video
+                                  ref={(el) => {
+                                    localVideoRef.current = el;
+                                    if (el && localStream && el.srcObject !== localStream) {
+                                      el.srcObject = localStream;
+                                      el.play().catch(() => {});
+                                    }
+                                  }}
+                                  autoPlay
+                                  muted
+                                  playsInline
+                                  className="w-full h-full object-cover transform -scale-x-100"
+                                />
+                              ) : (
+                                <div className="flex flex-col items-center space-y-2">
+                                  <div className="w-14 h-14 bg-indigo-600/30 border border-indigo-500/50 rounded-full flex items-center justify-center text-lg font-bold text-indigo-300">
+                                    {userInitials}
+                                  </div>
+                                </div>
+                              )
+                            ) : remoteStreams[tile.socketId] ? (
+                              <video
+                                ref={(el) => {
+                                  if (el && remoteStreams[tile.socketId] && el.srcObject !== remoteStreams[tile.socketId]) {
+                                    el.srcObject = remoteStreams[tile.socketId];
+                                    el.play().catch(() => {});
+                                  }
+                                }}
+                                autoPlay
+                                playsInline
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex flex-col items-center space-y-2">
+                                <div className="w-14 h-14 bg-indigo-600/30 border border-indigo-500/50 rounded-full flex items-center justify-center text-lg font-bold text-indigo-300">
+                                  {tile.name.slice(0, 2).toUpperCase()}
+                                </div>
                               </div>
+                            )}
+
+                            <div className="absolute bottom-2.5 left-2.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg text-xs text-white font-medium z-10 flex items-center space-x-1.5">
+                              <span className="truncate max-w-[140px]">
+                                {tile.name} {tile.isLocal ? '(you)' : ''}
+                              </span>
+                              {tile.isLocal && <span className="text-[10px] text-indigo-400 font-semibold">• host</span>}
                             </div>
-                          )}
-                          <div className="absolute bottom-2.5 left-2.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg text-[11px] text-white font-medium z-10">
-                            <span className="truncate max-w-[130px]">{p.name}</span>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })()}
               </div>
 
               {/* Right Chat & People Drawer */}
-              <div className="md:col-span-4 bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-3xl p-4 flex flex-col h-[400px] justify-between shadow-2xs">
+              <div className="md:col-span-4 bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-3xl p-4 flex flex-col h-[520px] max-h-[calc(100vh-210px)] justify-between shadow-2xs">
                 {/* Drawer Tab Switcher */}
                 <div className="bg-slate-100 dark:bg-slate-900 p-1 rounded-xl grid grid-cols-2 text-xs font-semibold">
                   <button
