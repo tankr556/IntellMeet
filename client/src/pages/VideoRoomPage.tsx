@@ -47,6 +47,8 @@ export const VideoRoomPage: React.FC = () => {
   // WebRTC & Media States
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const cameraVideoTrackRef = useRef<MediaStreamTrack | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -80,12 +82,18 @@ export const VideoRoomPage: React.FC = () => {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const recognitionRef = useRef<any>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [guestName, setGuestName] = useState(() => {
     return user?.name || localStorage.getItem('intellmeet_user_name') || 'Rakesh Tank';
   });
   const displayName = user?.name || guestName || 'Participant';
   const userInitials = displayName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'RT';
+
+  // Auto-scroll chat to latest message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   // Timer Effect once joined
   useEffect(() => {
@@ -290,7 +298,19 @@ export const VideoRoomPage: React.FC = () => {
         }
       }
 
-      const peer = createPeer(socketId, socket, currentStream);
+      let streamToSend = currentStream;
+      if (screenStreamRef.current) {
+        const screenTrack = screenStreamRef.current.getVideoTracks()[0];
+        const audioTrack = currentStream?.getAudioTracks()[0];
+        if (screenTrack) {
+          const combo = new MediaStream();
+          combo.addTrack(screenTrack);
+          if (audioTrack) combo.addTrack(audioTrack);
+          streamToSend = combo;
+        }
+      }
+
+      const peer = createPeer(socketId, socket, streamToSend);
       peersRef.current[socketId] = peer;
 
       try {
@@ -325,7 +345,19 @@ export const VideoRoomPage: React.FC = () => {
         }
       }
 
-      const peer = createPeer(fromSocketId, socket, currentStream);
+      let streamToSend = currentStream;
+      if (screenStreamRef.current) {
+        const screenTrack = screenStreamRef.current.getVideoTracks()[0];
+        const audioTrack = currentStream?.getAudioTracks()[0];
+        if (screenTrack) {
+          const combo = new MediaStream();
+          combo.addTrack(screenTrack);
+          if (audioTrack) combo.addTrack(audioTrack);
+          streamToSend = combo;
+        }
+      }
+
+      const peer = createPeer(fromSocketId, socket, streamToSend);
       peersRef.current[fromSocketId] = peer;
 
       try {
@@ -395,6 +427,10 @@ export const VideoRoomPage: React.FC = () => {
           recognitionRef.current.stop();
         } catch (e) { }
       }
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach((track) => track.stop());
+        screenStreamRef.current = null;
+      }
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
         localStreamRef.current = null;
@@ -409,8 +445,9 @@ export const VideoRoomPage: React.FC = () => {
   };
 
   const toggleMute = () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0];
+    const stream = localStreamRef.current || localStream;
+    if (stream) {
+      const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setIsMuted(!audioTrack.enabled);
@@ -419,12 +456,97 @@ export const VideoRoomPage: React.FC = () => {
   };
 
   const toggleVideo = () => {
-    if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0];
+    const stream = localStreamRef.current || localStream;
+    if (stream) {
+      const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         setIsVideoOff(!videoTrack.enabled);
       }
+    }
+  };
+
+  const stopScreenShare = () => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current = null;
+    }
+    setIsScreenSharing(false);
+
+    // Restore camera track to all active WebRTC peers
+    const originalCameraTrack =
+      cameraVideoTrackRef.current ||
+      (localStreamRef.current ? localStreamRef.current.getVideoTracks()[0] : null);
+
+    if (originalCameraTrack) {
+      Object.values(peersRef.current).forEach((peer) => {
+        const sender = peer.getSenders().find((s) => s.track?.kind === 'video');
+        if (sender) {
+          sender.replaceTrack(originalCameraTrack).catch((err) =>
+            console.warn('[WebRTC] Error restoring camera track:', err)
+          );
+        }
+      });
+    }
+
+    // Restore local video display to camera stream
+    if (localVideoRef.current && localStreamRef.current) {
+      localVideoRef.current.srcObject = localStreamRef.current;
+      localVideoRef.current.play().catch(() => {});
+    }
+  };
+
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      stopScreenShare();
+      return;
+    }
+
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
+
+      const screenTrack = screenStream.getVideoTracks()[0];
+      if (!screenTrack) return;
+
+      screenStreamRef.current = screenStream;
+      setIsScreenSharing(true);
+
+      // Save current camera track for restoration when screen sharing ends
+      if (localStreamRef.current) {
+        const currentCameraTrack = localStreamRef.current.getVideoTracks()[0];
+        if (currentCameraTrack) {
+          cameraVideoTrackRef.current = currentCameraTrack;
+        }
+      }
+
+      // Replace video track in all active peer connections
+      Object.values(peersRef.current).forEach((peer) => {
+        const sender = peer.getSenders().find((s) => s.track?.kind === 'video');
+        if (sender) {
+          sender.replaceTrack(screenTrack).catch((err) =>
+            console.warn('[WebRTC] Error replacing track with screen:', err)
+          );
+        }
+      });
+
+      // Update local preview to show the shared screen
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = screenStream;
+        localVideoRef.current.play().catch(() => {});
+      }
+
+      // Automatically revert to camera when user clicks browser's native "Stop sharing" button
+      screenTrack.onended = () => {
+        stopScreenShare();
+      };
+    } catch (err: any) {
+      if (err.name !== 'NotAllowedError') {
+        console.error('Failed to share screen:', err);
+      }
+      setIsScreenSharing(false);
     }
   };
 
@@ -677,7 +799,21 @@ export const VideoRoomPage: React.FC = () => {
                             className={`bg-slate-900 dark:bg-[#0F172A] border border-slate-800 rounded-2xl relative overflow-hidden flex items-center justify-center shadow-lg aspect-video ${tileWrapperClass}`}
                           >
                             {tile.isLocal ? (
-                              localStream && !isVideoOff ? (
+                              isScreenSharing && screenStreamRef.current ? (
+                                <video
+                                  ref={(el) => {
+                                    localVideoRef.current = el;
+                                    if (el && screenStreamRef.current && el.srcObject !== screenStreamRef.current) {
+                                      el.srcObject = screenStreamRef.current;
+                                      el.play().catch(() => {});
+                                    }
+                                  }}
+                                  autoPlay
+                                  muted
+                                  playsInline
+                                  className="w-full h-full object-contain bg-black"
+                                />
+                              ) : localStream && !isVideoOff ? (
                                 <video
                                   ref={(el) => {
                                     localVideoRef.current = el;
@@ -722,7 +858,16 @@ export const VideoRoomPage: React.FC = () => {
                               <span className="truncate max-w-[140px]">
                                 {tile.name} {tile.isLocal ? '(you)' : ''}
                               </span>
-                              {tile.isLocal && <span className="text-[10px] text-indigo-400 font-semibold">• host</span>}
+                              {tile.isLocal && (
+                                <span className={`text-[10px] font-semibold ${isScreenSharing ? 'text-amber-300' : 'text-indigo-400'}`}>
+                                  {isScreenSharing ? '• Sharing Screen' : '• host'}
+                                </span>
+                              )}
+                              {tile.isLocal && isMuted && (
+                                <span className="p-0.5 bg-red-500/80 rounded text-white" title="Microphone muted">
+                                  <MicOff className="w-3 h-3" />
+                                </span>
+                              )}
                             </div>
                           </div>
                         );
@@ -758,12 +903,18 @@ export const VideoRoomPage: React.FC = () => {
                         No messages yet. Say hello, or type @ to mention a team-mate.
                       </div>
                     ) : (
-                      messages.map((m, idx) => (
-                        <div key={idx} className="bg-slate-50 dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
-                          <span className="font-bold text-indigo-600 dark:text-indigo-400">{m.senderName}</span>
-                          <p className="text-slate-700 dark:text-slate-200 mt-0.5">{m.text}</p>
-                        </div>
-                      ))
+                      <>
+                        {messages.map((m, idx) => (
+                          <div key={idx} className="bg-slate-50 dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-indigo-600 dark:text-indigo-400">{m.senderName}</span>
+                              <span className="text-[10px] text-slate-400">{m.timestamp}</span>
+                            </div>
+                            <p className="text-slate-700 dark:text-slate-200 mt-1">{m.text}</p>
+                          </div>
+                        ))}
+                        <div ref={messagesEndRef} />
+                      </>
                     )
                   ) : (
                     <div className="space-y-2 text-xs">
@@ -830,11 +981,11 @@ export const VideoRoomPage: React.FC = () => {
 
                 {/* 3. Screen Share */}
                 <button
-                  onClick={() => setIsScreenSharing(!isScreenSharing)}
-                  title="Share your screen"
+                  onClick={toggleScreenShare}
+                  title={isScreenSharing ? 'Stop sharing screen' : 'Share your screen'}
                   className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl border flex items-center justify-center transition shrink-0 cursor-pointer ${
                     isScreenSharing
-                      ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400'
+                      ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-500 text-amber-600 dark:text-amber-400 font-semibold shadow-xs'
                       : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
