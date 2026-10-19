@@ -12,13 +12,15 @@ import {
   CheckCircle2,
   MessageSquare,
   FileText,
-  CheckSquare
+  CheckSquare,
+  Loader2
 } from 'lucide-react';
 import api from '../api/apiClient';
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
 
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
   const [activeTheme, setActiveTheme] = useState<'Light' | 'Dark' | 'System'>(() => {
@@ -51,19 +53,43 @@ export const LandingPage: React.FC = () => {
   };
 
   const handleTryDemo = async () => {
+    if (isDemoLoading) return;
+    setIsDemoLoading(true);
+
+    const guestId = Math.floor(Math.random() * 9000 + 1000);
+    const demoName = 'Maple Crane';
+    const demoEmail = `guest_${guestId}@intellmeet.com`;
+
+    let guestUser: any = {
+      id: `guest_${guestId}`,
+      name: demoName,
+      email: demoEmail,
+      role: 'Member'
+    };
+    let token = 'demo_guest_token_' + Date.now();
+
     try {
-      const demoEmail = `guest_${Math.floor(Math.random() * 10000)}@intellmeet.com`;
       const res = await api.post('/auth/signup', {
-        name: 'Maple Crane',
+        name: demoName,
         email: demoEmail,
         password: 'demopassword123',
         role: 'Member'
       });
-      setAuth(res.data.user, res.data.accessToken);
-      navigate('/lobby');
-    } catch (err) {
-      navigate('/login');
+      if (res.data?.user) {
+        guestUser = res.data.user;
+      }
+      if (res.data?.accessToken) {
+        token = res.data.accessToken;
+      }
+    } catch (apiErr) {
+      console.warn('Backend waking up or offline, launching demo session locally', apiErr);
     }
+
+    setAuth(guestUser, token);
+    localStorage.setItem('intellmeet_user_name', demoName);
+    setTimeout(() => {
+      navigate('/lobby');
+    }, 400);
   };
 
   return (
@@ -174,10 +200,20 @@ export const LandingPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-4 pt-2">
             <button
               onClick={handleTryDemo}
-              className="bg-[#4F46E5] hover:bg-indigo-700 text-white font-bold px-6 py-3.5 rounded-xl text-xs flex items-center space-x-2 shadow-md shadow-indigo-500/20 transition"
+              disabled={isDemoLoading}
+              className="bg-[#4F46E5] hover:bg-indigo-700 disabled:opacity-80 disabled:cursor-not-allowed text-white font-bold px-6 py-3.5 rounded-xl text-xs flex items-center space-x-2 shadow-md shadow-indigo-500/20 transition cursor-pointer"
             >
-              <span>Try Live Demo</span>
-              <ArrowRight className="w-4 h-4" />
+              {isDemoLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Entering live demo...</span>
+                </>
+              ) : (
+                <>
+                  <span>Try Live Demo</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
 
             <button
@@ -358,10 +394,20 @@ export const LandingPage: React.FC = () => {
           <div className="pt-2">
             <button
               onClick={handleTryDemo}
-              className="bg-[#4F46E5] hover:bg-indigo-700 text-white font-bold px-8 py-3.5 rounded-xl text-xs inline-flex items-center space-x-2 shadow-md shadow-indigo-500/20 transition"
+              disabled={isDemoLoading}
+              className="bg-[#4F46E5] hover:bg-indigo-700 disabled:opacity-80 disabled:cursor-not-allowed text-white font-bold px-8 py-3.5 rounded-xl text-xs inline-flex items-center space-x-2 shadow-md shadow-indigo-500/20 transition cursor-pointer"
             >
-              <span>Try Live Demo</span>
-              <ArrowRight className="w-4 h-4" />
+              {isDemoLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Entering live demo...</span>
+                </>
+              ) : (
+                <>
+                  <span>Try Live Demo</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </div>
         </div>

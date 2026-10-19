@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import api from '../api/apiClient';
 import { useAuthStore } from '../store/useAuthStore';
 import { validateAuthForm, type FieldErrors } from '../utils/authValidation';
-import { Bot, Sparkles, ShieldCheck, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { Bot, Sparkles, ShieldCheck, AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export const AuthPage: React.FC<{ mode: 'login' | 'signup' }> = ({ mode }) => {
   const [name, setName] = useState('');
@@ -16,6 +16,7 @@ export const AuthPage: React.FC<{ mode: 'login' | 'signup' }> = ({ mode }) => {
   const [serverError, setServerError] = useState('');
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
 
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -37,19 +38,44 @@ export const AuthPage: React.FC<{ mode: 'login' | 'signup' }> = ({ mode }) => {
   };
 
   const handleTryDemo = async () => {
+    if (isDemoLoading) return;
+    setIsDemoLoading(true);
+
+    const guestId = Math.floor(Math.random() * 9000 + 1000);
+    const demoName = 'Maple Crane';
+    const demoEmail = `guest_${guestId}@intellmeet.com`;
+
+    let guestUser: any = {
+      id: `guest_${guestId}`,
+      name: demoName,
+      email: demoEmail,
+      role: 'Member'
+    };
+    let token = 'demo_guest_token_' + Date.now();
+
     try {
-      const demoEmail = `guest_${Math.floor(Math.random() * 10000)}@intellmeet.com`;
       const res = await api.post('/auth/signup', {
-        name: 'Maple Crane',
+        name: demoName,
         email: demoEmail,
         password: 'demopassword123',
         role: 'Member'
       });
-      setAuth(res.data.user, res.data.accessToken);
-      navigate('/lobby');
-    } catch (err) {
-      navigate('/');
+      if (res.data?.user) {
+        guestUser = res.data.user;
+      }
+      if (res.data?.accessToken) {
+        token = res.data.accessToken;
+      }
+    } catch (apiErr) {
+      console.warn('Backend waking up or offline, launching demo session locally', apiErr);
     }
+
+    setAuth(guestUser, token);
+    localStorage.setItem('intellmeet_user_name', demoName);
+    triggerToast('success', 'Entering live demo workspace...');
+    setTimeout(() => {
+      navigate('/lobby');
+    }, 400);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -233,14 +259,19 @@ export const AuthPage: React.FC<{ mode: 'login' | 'signup' }> = ({ mode }) => {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full bg-[#4F46E5] hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-xl text-xs shadow-sm transition mt-2"
+              disabled={loading || isDemoLoading}
+              className="w-full bg-[#4F46E5] hover:bg-indigo-700 disabled:opacity-75 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-4 rounded-xl text-xs shadow-sm transition mt-2 flex items-center justify-center space-x-2 cursor-pointer"
             >
-              {loading
-                ? 'Processing...'
-                : mode === 'login'
-                  ? 'Sign in'
-                  : 'Create account'}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Processing...</span>
+                </>
+              ) : mode === 'login' ? (
+                'Sign in'
+              ) : (
+                'Create account'
+              )}
             </button>
           </form>
 
@@ -254,10 +285,19 @@ export const AuthPage: React.FC<{ mode: 'login' | 'signup' }> = ({ mode }) => {
               </div>
 
               <button
+                type="button"
                 onClick={handleTryDemo}
-                className="w-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-semibold py-2.5 px-4 rounded-xl text-xs shadow-2xs transition"
+                disabled={loading || isDemoLoading}
+                className="w-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-75 disabled:cursor-not-allowed border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-semibold py-2.5 px-4 rounded-xl text-xs shadow-2xs transition flex items-center justify-center space-x-2 cursor-pointer"
               >
-                Try the live demo
+                {isDemoLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400" />
+                    <span>Entering live demo...</span>
+                  </>
+                ) : (
+                  <span>Try the live demo</span>
+                )}
               </button>
             </div>
           )}
